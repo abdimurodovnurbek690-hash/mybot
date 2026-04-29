@@ -1,43 +1,40 @@
 import telebot
 from telebot import types
-from openpyxl import Workbook, load_workbook
 import os
+from openpyxl import Workbook, load_workbook
 
-TOKEN = "8630207711:AAElMiqbNbjeQnN_BTl8lqbzefpS2kO_Vxg"
-ADMIN_ID = 2133751835  # o'zingni telegram ID yoz
+TOKEN = os.getenv("TOKEN")
+ADMIN_ID = 2133751835 # <-- o'zingni ID qo'y
 
 bot = telebot.TeleBot(TOKEN)
 
 user_data = {}
 
-# Excel fayl yaratish
-if not os.path.exists("orders.xlsx"):
+# 📊 Excel yaratish
+file_name = "orders.xlsx"
+
+if not os.path.exists(file_name):
     wb = Workbook()
     ws = wb.active
     ws.append(["Mahsulot", "Narx", "Telefon", "Manzil"])
-    wb.save("orders.xlsx")
+    wb.save(file_name)
 
-
-# START
+# 🟢 START
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     btn = types.KeyboardButton("📦 Buyurtma berish")
     markup.add(btn)
+    bot.send_message(message.chat.id, "Assalomu alaykum! Buyurtma berish uchun tugmani bosing", reply_markup=markup)
 
-    bot.send_message(message.chat.id, "Assalomu alaykum! Buyurtma berish uchun tugmani bosing.", reply_markup=markup)
-
-
-# BUYURTMA BOSHLASH
+# 📦 BUYURTMA
 @bot.message_handler(func=lambda m: m.text == "📦 Buyurtma berish")
-def order_start(message):
+def buyurtma(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add("🍎 Olma - 10000", "🍌 Banan - 15000")
-
     bot.send_message(message.chat.id, "Mahsulotni tanlang:", reply_markup=markup)
 
-
-# MAHSULOT TANLASH
+# 🛒 MAHSULOT
 @bot.message_handler(func=lambda m: "Olma" in m.text or "Banan" in m.text)
 def product(message):
     if "Olma" in message.text:
@@ -45,74 +42,61 @@ def product(message):
     else:
         narx = 15000
 
-    user_data[message.chat.id] = {
-        "product": message.text,
-        "price": narx
-    }
+    user_data[message.chat.id] = {"product": message.text, "price": narx}
 
-    btn = types.KeyboardButton("📱 Telefon yuborish", request_contact=True)
+    btn = types.KeyboardButton("📞 Telefon yuborish", request_contact=True)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
     markup.add(btn)
 
     bot.send_message(message.chat.id, "Telefon raqamingizni yuboring:", reply_markup=markup)
 
-
-# TELEFON
+# 📞 TELEFON
 @bot.message_handler(content_types=['contact'])
 def contact(message):
     user_data[message.chat.id]["phone"] = message.contact.phone_number
-
     bot.send_message(message.chat.id, "📍 Manzilni yozing:")
 
-
-# MANZIL + YAKUNIY
+# 📍 MANZIL + YAKUN
 @bot.message_handler(func=lambda m: True)
 def location(message):
-    data = user_data.get(message.chat.id)
+    data = user_data.get(message.chat.id, {})
 
-    if not data:
+    if "phone" not in data:
         return
 
     data["address"] = message.text
 
-    text = f"""
-🆕 Yangi buyurtma:
+    product = data["product"]
+    price = data["price"]
+    phone = data["phone"]
+    address = data["address"]
 
-📦 {data['product']}
-💰 {data['price']} so'm
-📱 {data['phone']}
-📍 {data['address']}
-"""
+    # 💳 Payme link
+    link = f"https://payme.uz/pay?amount={price*100}"
 
-    # USERGA
-    bot.send_message(message.chat.id, "✅ Buyurtma qabul qilindi!")
-
-    # TO‘LOV TUGMA
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton(
-        "💳 To‘lov qilish",
-        url="https://payme.uz/pay"
+    markup.add(types.InlineKeyboardButton("💳 To‘lov qilish", url=link))
+
+    bot.send_message(message.chat.id, "✅ Buyurtma qabul qilindi!\n💳 To‘lovni amalga oshiring:", reply_markup=markup)
+
+    # 👨‍💻 Adminga yuborish
+    bot.send_message(ADMIN_ID,
+        f"🆕 Yangi buyurtma:\n\n"
+        f"📦 {product}\n"
+        f"💰 {price} so'm\n"
+        f"📞 {phone}\n"
+        f"📍 {address}"
     )
-    markup.add(btn)
 
-    bot.send_message(message.chat.id, "💰 To‘lovni amalga oshiring:", reply_markup=markup)
-
-    # ADMINGA YUBORISH
-    bot.send_message(ADMIN_ID, text)
-
-    # EXCELGA YOZISH
-    wb = load_workbook("orders.xlsx")
+    # 📊 Excelga yozish
+    wb = load_workbook(file_name)
     ws = wb.active
-    ws.append([
-        data['product'],
-        data['price'],
-        data['phone'],
-        data['address']
-    ])
-    wb.save("orders.xlsx")
+    ws.append([product, price, phone, address])
+    wb.save(file_name)
 
-    # TOZALASH
+    # Excelni adminga yuborish
+    bot.send_document(ADMIN_ID, open(file_name, "rb"))
+
     user_data.pop(message.chat.id)
-
 
 bot.infinity_polling()
