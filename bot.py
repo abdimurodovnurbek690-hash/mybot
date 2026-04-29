@@ -1,105 +1,118 @@
-import os
 import telebot
 from telebot import types
 from openpyxl import Workbook, load_workbook
+import os
 
-TOKEN = os.getenv("BOT_TOKEN")
+TOKEN = "SENING_TOKENING"
+ADMIN_ID = 2133751835  # o'zingni telegram ID yoz
+
 bot = telebot.TeleBot(TOKEN)
-
-ADMIN_ID = 2133751835  # 👉 BU YERGA O'ZINGNI ID
 
 user_data = {}
 
-# 💰 NARXLAR
-prices = {
-    "🍎 Olma": 10000,
-    "🍌 Banan": 15000
-}
-
-# 📊 EXCEL FUNKSIYA
-def save_to_excel(product, price, phone, address):
-    file = "orders.xlsx"
-
-    if not os.path.exists(file):
-        wb = Workbook()
-        ws = wb.active
-        ws.append(["Mahsulot", "Narx", "Telefon", "Manzil"])
-        wb.save(file)
-
-    wb = load_workbook(file)
+# Excel fayl yaratish
+if not os.path.exists("orders.xlsx"):
+    wb = Workbook()
     ws = wb.active
-    ws.append([product, price, phone, address])
-    wb.save(file)
+    ws.append(["Mahsulot", "Narx", "Telefon", "Manzil"])
+    wb.save("orders.xlsx")
 
-# 🚀 START
+
+# START
 @bot.message_handler(commands=['start'])
 def start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("📦 Buyurtma berish")
+    btn = types.KeyboardButton("📦 Buyurtma berish")
+    markup.add(btn)
+
     bot.send_message(message.chat.id, "Assalomu alaykum! Buyurtma berish uchun tugmani bosing.", reply_markup=markup)
 
-# 📦 BUYURTMA BOSHLASH
+
+# BUYURTMA BOSHLASH
 @bot.message_handler(func=lambda m: m.text == "📦 Buyurtma berish")
-def order(message):
+def order_start(message):
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    markup.add("🍎 Olma", "🍌 Banan")
+    markup.add("🍎 Olma - 10000", "🍌 Banan - 15000")
+
     bot.send_message(message.chat.id, "Mahsulotni tanlang:", reply_markup=markup)
 
-# 🛒 MAHSULOT TANLASH
-@bot.message_handler(func=lambda m: m.text in prices)
-def product(message):
-    user_data[message.chat.id] = {"product": message.text}
 
+# MAHSULOT TANLASH
+@bot.message_handler(func=lambda m: "Olma" in m.text or "Banan" in m.text)
+def product(message):
+    if "Olma" in message.text:
+        narx = 10000
+    else:
+        narx = 15000
+
+    user_data[message.chat.id] = {
+        "product": message.text,
+        "price": narx
+    }
+
+    btn = types.KeyboardButton("📱 Telefon yuborish", request_contact=True)
     markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
-    btn = types.KeyboardButton("📞 Telefon yuborish", request_contact=True)
     markup.add(btn)
 
     bot.send_message(message.chat.id, "Telefon raqamingizni yuboring:", reply_markup=markup)
 
-# 📞 TELEFON
+
+# TELEFON
 @bot.message_handler(content_types=['contact'])
 def contact(message):
     user_data[message.chat.id]["phone"] = message.contact.phone_number
-    bot.send_message(message.chat.id, "📍 Manzilingizni yozing:")
 
-# 📍 MANZIL
-@bot.message_handler(func=lambda message: True)
-def address(message):
-    data = user_data.get(message.chat.id, {})
+    bot.send_message(message.chat.id, "📍 Manzilni yozing:")
 
-    product = data.get("product", "Noma'lum")
-    phone = data.get("phone", "Noma'lum")
-    address = message.text
-    price = prices.get(product, 0)
 
-    # 📦 FOYDALANUVCHIGA
-    bot.send_message(message.chat.id,
-        f"📦 Yangi buyurtma:\n"
-        f"{product}\n"
-        f"💰 {price} so'm\n"
-        f"📞 {phone}\n"
-        f"📍 {address}"
-    )
+# MANZIL + YAKUNIY
+@bot.message_handler(func=lambda m: True)
+def location(message):
+    data = user_data.get(message.chat.id)
 
+    if not data:
+        return
+
+    data["address"] = message.text
+
+    text = f"""
+🆕 Yangi buyurtma:
+
+📦 {data['product']}
+💰 {data['price']} so'm
+📱 {data['phone']}
+📍 {data['address']}
+"""
+
+    # USERGA
     bot.send_message(message.chat.id, "✅ Buyurtma qabul qilindi!")
 
-    # 💳 TO‘LOV
+    # TO‘LOV TUGMA
     markup = types.InlineKeyboardMarkup()
-    btn = types.InlineKeyboardButton("💳 To‘lov qilish", url="https://payme.uz")
+    btn = types.InlineKeyboardButton(
+        "💳 To‘lov qilish",
+        url="https://payme.uz/pay"
+    )
     markup.add(btn)
 
     bot.send_message(message.chat.id, "💰 To‘lovni amalga oshiring:", reply_markup=markup)
 
-    # 👨‍💻 ADMIN
-    bot.send_message(ADMIN_ID,
-        f"🆕 BUYURTMA\n\n"
-        f"📦 {product}\n"
-        f"💰 {price} so'm\n"
-        f"📞 {phone}\n"
-        f"📍 {address}"
-    )
+    # ADMINGA YUBORISH
+    bot.send_message(ADMIN_ID, text)
 
-    # 📊 EXCEL
-    save_to_excel(product, price, phone, address)
+    # EXCELGA YOZISH
+    wb = load_workbook("orders.xlsx")
+    ws = wb.active
+    ws.append([
+        data['product'],
+        data['price'],
+        data['phone'],
+        data['address']
+    ])
+    wb.save("orders.xlsx")
+
+    # TOZALASH
+    user_data.pop(message.chat.id)
+
 
 bot.infinity_polling()
