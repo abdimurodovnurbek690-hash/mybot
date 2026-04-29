@@ -63,6 +63,12 @@ def location(message):
     )
 
     bot.send_message(message.chat.id, "✅ Buyurtma qabul qilindi!")
+bot.send_message(message.chat.id, "✅ Buyurtma qabul qilindi!")
 
+markup = types.InlineKeyboardMarkup()
+btn = types.InlineKeyboardButton("💳 To‘lov qilish", url="https://payme.uz")
+markup.add(btn)
+
+bot.send_message(message.chat.id, "💰 To‘lovni amalga oshiring:", reply_markup=markup)
 
 bot.infinity_polling()
