@@ -3,7 +3,7 @@ from telebot import types
 from openpyxl import Workbook, load_workbook
 import os
 
-TOKEN = "SENING_TOKENING"
+TOKEN = "8630207711:AAElMiqbNbjeQnN_BTl8lqbzefpS2kO_Vxg"
 ADMIN_ID = 2133751835  # o'zingni telegram ID yoz
 
 bot = telebot.TeleBot(TOKEN)
